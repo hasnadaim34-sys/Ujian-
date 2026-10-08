@@ -50,6 +50,8 @@ export const ExamManager: React.FC<ExamManagerProps> = ({
   const [proctorPin, setProctorPin] = useState('1234');
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
   const [formSuccessMessage, setFormSuccessMessage] = useState('');
+  const [formErrorMessage, setFormErrorMessage] = useState('');
+  const [examToDelete, setExamToDelete] = useState<{ id: string; title: string } | null>(null);
 
   const generateRandomCode = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -76,6 +78,7 @@ export const ExamManager: React.FC<ExamManagerProps> = ({
     setViolationAction('suspend');
     setProctorPin('1234');
     setSelectedQuestionIds(questionBank.map(q => q.id)); // default select all
+    setFormErrorMessage('');
     setIsEditing(true);
   };
 
@@ -95,19 +98,22 @@ export const ExamManager: React.FC<ExamManagerProps> = ({
     setViolationAction(exam.violationAction);
     setProctorPin(exam.proctorPin);
     setSelectedQuestionIds(exam.questions.map(q => q.id));
+    setFormErrorMessage('');
     setIsEditing(true);
   };
 
   const handleSaveExam = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormErrorMessage('');
+
     if (!title.trim() || !code.trim()) {
-      alert('Judul dan Kode Ujian wajib diisi');
+      setFormErrorMessage('Judul dan Kode Ujian wajib diisi!');
       return;
     }
 
     const assignedQuestions = questionBank.filter(q => selectedQuestionIds.includes(q.id));
     if (assignedQuestions.length === 0) {
-      alert('Pilih minimal 1 butir soal untuk dimasukkan ke dalam paket ujian!');
+      setFormErrorMessage('Pilih minimal 1 butir soal untuk dimasukkan ke dalam paket ujian!');
       return;
     }
 
@@ -143,9 +149,10 @@ export const ExamManager: React.FC<ExamManagerProps> = ({
     }, 1000);
   };
 
-  const handleDeleteExam = (id: string, examTitle: string) => {
-    if (confirm(`Hapus paket ujian "${examTitle}"? Data hasil dan sesi yang terkait akan ikut dihapus.`)) {
-      StorageService.deleteExam(id);
+  const handleConfirmDelete = () => {
+    if (examToDelete) {
+      StorageService.deleteExam(examToDelete.id);
+      setExamToDelete(null);
       onRefresh();
     }
   };
@@ -193,6 +200,13 @@ export const ExamManager: React.FC<ExamManagerProps> = ({
             <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>{formSuccessMessage}</span>
+            </div>
+          )}
+
+          {formErrorMessage && (
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs flex items-center gap-2">
+              <X className="w-4 h-4 text-rose-600" />
+              <span>{formErrorMessage}</span>
             </div>
           )}
 
@@ -515,7 +529,7 @@ export const ExamManager: React.FC<ExamManagerProps> = ({
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDeleteExam(exam.id, exam.title)}
+                    onClick={() => setExamToDelete({ id: exam.id, title: exam.title })}
                     title="Hapus Ujian"
                     className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded"
                   >
@@ -569,6 +583,37 @@ export const ExamManager: React.FC<ExamManagerProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Delete Exam Confirmation Modal */}
+      {examToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-xl border border-slate-200">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">Hapus Paket Ujian?</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Yakin ingin menghapus <strong>"{examToDelete.title}"</strong>? Data hasil dan sesi yang terkait akan ikut dihapus.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setExamToDelete(null)}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold"
+              >
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

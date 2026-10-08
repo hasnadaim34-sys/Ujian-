@@ -258,6 +258,15 @@ export class StorageService {
     return session;
   }
 
+  // Update current question index for student
+  static updateCurrentQuestionIndex(sessionId: string, index: number): void {
+    const session = this.getSession(sessionId);
+    if (session) {
+      session.currentQuestionIndex = index;
+      this.saveSession(session);
+    }
+  }
+
   // Calculate score and submit exam
   static calculateAndSubmitSession(session: ExamSession, exam: ExamSettings): ExamSession {
     let totalScore = 0;
@@ -269,6 +278,14 @@ export class StorageService {
       const ans = session.answers[q.id];
 
       if (!ans || ans.value === undefined || ans.value === null || ans.value === '') {
+        // Record zero score for unanswered questions
+        session.answers[q.id] = {
+          questionId: q.id,
+          type: q.type,
+          value: '',
+          scoreAwarded: 0,
+          updatedAt: new Date().toISOString(),
+        };
         return;
       }
 

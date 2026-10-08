@@ -158,10 +158,49 @@ export const ExamFinished: React.FC<ExamFinishedProps> = ({
 
                   <div className="p-2.5 bg-white rounded-lg border border-slate-200 text-slate-700">
                     <span className="text-slate-400 block text-[10px] uppercase font-semibold">Jawaban Anda:</span>
-                    <div className="font-semibold mt-0.5">
-                      {q.type === 'bs' 
-                        ? JSON.stringify(studentAns?.value || {})
-                        : String(studentAns?.value || '(Kosong)')}
+                    <div className="mt-1">
+                      {q.type === 'bs' && q.statements ? (
+                        <div className="space-y-1">
+                          {q.statements.map((st, sIdx) => {
+                            const valMap = (studentAns?.value || {}) as Record<string, boolean>;
+                            const studentChoice = valMap[st.id];
+                            const isCorrect = studentChoice === st.correctAnswer;
+                            return (
+                              <div key={st.id} className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] gap-1 py-1 border-b border-slate-100 last:border-0">
+                                <span>{sIdx + 1}. {st.statement}</span>
+                                <span className="font-semibold shrink-0">
+                                  Dijawab: <span className={studentChoice !== undefined ? 'text-slate-900' : 'text-slate-400'}>
+                                    {studentChoice === true ? 'Benar' : studentChoice === false ? 'Salah' : '(Kosong)'}
+                                  </span>
+                                  {' · '}
+                                  <span className={isCorrect ? 'text-emerald-700' : 'text-rose-700'}>
+                                    (Kunci: {st.correctAnswer ? 'Benar' : 'Salah'})
+                                  </span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : q.type === 'pg' && q.options ? (
+                        <div className="font-semibold text-xs flex items-center justify-between">
+                          <span>
+                            {studentAns?.value ? (
+                              <>
+                                Opsi {studentAns.value}: {q.options.find(o => o.id === studentAns.value)?.text || ''}
+                              </>
+                            ) : (
+                              <span className="text-slate-400 font-normal italic">(Tidak dijawab)</span>
+                            )}
+                          </span>
+                          <span className={`text-[11px] ${studentAns?.value === q.correctAnswerKey ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            Kunci: {q.correctAnswerKey}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="font-semibold text-xs whitespace-pre-wrap">
+                          {studentAns?.value ? String(studentAns.value) : <span className="text-slate-400 font-normal italic">(Tidak dijawab)</span>}
+                        </div>
+                      )}
                     </div>
                   </div>
 

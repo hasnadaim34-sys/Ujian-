@@ -200,7 +200,24 @@ export const ExamInstruction: React.FC<ExamInstructionProps> = ({
           {/* Action button */}
           <div className="pt-2">
             <button
-              onClick={onStartExam}
+              onClick={async () => {
+                try {
+                  const docEl = document.documentElement as any;
+                  if (docEl.requestFullscreen) {
+                    await docEl.requestFullscreen();
+                  } else if (docEl.webkitRequestFullscreen) {
+                    await docEl.webkitRequestFullscreen();
+                  } else if (docEl.mozRequestFullScreen) {
+                    await docEl.mozRequestFullScreen();
+                  } else if (docEl.msRequestFullscreen) {
+                    await docEl.msRequestFullscreen();
+                  }
+                } catch (err) {
+                  // If running in restricted iframe or sandbox, continue gracefully
+                  console.warn('Mode layar penuh dibatasi oleh peramban atau iframe:', err);
+                }
+                onStartExam();
+              }}
               disabled={!agreed}
               className={`w-full py-3.5 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-all ${
                 agreed

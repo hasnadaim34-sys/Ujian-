@@ -32,6 +32,12 @@ export const ExamResults: React.FC<ExamResultsProps> = ({
   const [gradingSession, setGradingSession] = useState<ExamSession | null>(null);
   const [essayScores, setEssayScores] = useState<Record<string, number>>({});
   const [essayFeedbacks, setEssayFeedbacks] = useState<Record<string, string>>({});
+  const [toastMessage, setToastMessage] = useState<string>('');
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
 
   const currentExam = exams.find(e => e.id === selectedExamId) || exams[0];
   const examSessions = currentExam ? sessions.filter(s => s.examId === currentExam.id && s.status === 'submitted') : [];
@@ -79,7 +85,7 @@ export const ExamResults: React.FC<ExamResultsProps> = ({
 
     setGradingSession(null);
     onRefresh();
-    alert('Penilaian uraian berhasil disimpan dan nilai akhir diperbarui.');
+    showToast('Penilaian uraian berhasil disimpan dan nilai akhir diperbarui.');
   };
 
   const handleExportCSV = () => {
@@ -421,6 +427,14 @@ export const ExamResults: React.FC<ExamResultsProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-800 text-xs flex items-center gap-2 animate-in slide-in-from-bottom">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
         </div>
       )}
     </div>

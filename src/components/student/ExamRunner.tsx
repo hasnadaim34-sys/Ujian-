@@ -67,16 +67,27 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
 
   // Submit Confirmation Modal state
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
+  const [showMobilePalette, setShowMobilePalette] = useState<boolean>(false);
+  const [isTimeExpiredSubmitting, setIsTimeExpiredSubmitting] = useState<boolean>(false);
+
+  // Grace period ref to prevent false positives when entering kiosk mode
+  const mountTimeRef = useRef<number>(Date.now());
 
   // Questions for this exam
   const questions = exam.questions;
   const currentQuestion: Question | undefined = questions[currentIndex];
 
-  // Request fullscreen function
+  // Request fullscreen function with cross-browser fallbacks
   const requestKioskFullscreen = async () => {
     try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
+      const docEl = document.documentElement as any;
+      const isAlreadyFs = document.fullscreenElement || (document as any).webkitFullscreenElement;
+      if (!isAlreadyFs) {
+        if (docEl.requestFullscreen) {
+          await docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          await docEl.webkitRequestFullscreen();
+        }
       }
     } catch (err) {
       console.warn('Fullscreen request could not be completed:', err);
@@ -87,6 +98,13 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
   useEffect(() => {
     requestKioskFullscreen();
   }, []);
+
+  // Update current question index and persist
+  const handleNavigateQuestion = (newIndex: number) => {
+    setCurrentIndex(newIndex);
+    StorageService.updateCurrentQuestionIndex(session.id, newIndex);
+    setShowMobilePalette(false);
+  };
 
   // Sync session from storage updates (e.g. if proctor unlocks from Teacher panel!)
   useEffect(() => {
@@ -130,15 +148,22 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
   }, [endTime]);
 
   const handleTimeExpiredAutoSubmit = () => {
-    alert('Waktu pengerjaan ujian telah habis! Sistem secara otomatis mengunci dan mengirimkan jawaban Anda.');
-    const finalized = StorageService.calculateAndSubmitSession(session, exam);
-    onFinishExam(finalized);
+    setIsTimeExpiredSubmitting(true);
+    setTimeout(() => {
+      const finalized = StorageService.calculateAndSubmitSession(session, exam);
+      onFinishExam(finalized);
+    }, 1800);
   };
 
   // INTEGRITY / SECURITY DETECTION LISTENERS
   const handleSecurityBreach = (type: ViolationType, description: string) => {
     // If already submitted or already suspended, skip
     if (session.status === 'submitted' || session.status === 'suspended') return;
+
+    // Grace period: ignore false positives in the first 2.5 seconds during page transition
+    if (Date.now() - mountTimeRef.current < 2500) {
+      return;
+    }
 
     try {
       const result = StorageService.recordViolation(
@@ -183,7 +208,8 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
 
     // 3. Fullscreen exit detection
     const handleFullscreenChange = () => {
-      if (!document.fullscreenElement && session.status === 'in_progress') {
+      const isFs = document.fullscreenElement || (document as any).webkitFullscreenElement;
+      if (!isFs && session.status === 'in_progress') {
         handleSecurityBreach(
           'fullscreen_exit',
           'Terdeteksi keluar dari mode layar penuh (Fullscreen Exited). Silakan segera kembali ke mode layar penuh.'
@@ -193,10 +219,17 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
 
     // 4. Keyboard Shortcuts Blocker (Ctrl+C, Ctrl+V, Ctrl+P, F12, Alt+Tab, Escape, etc.)
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Block Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+P, Ctrl+U
+      const isTextInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+
+      // Allow Ctrl+A (select all), Ctrl+Z (undo) when typing inside text inputs
+      if (isTextInput && e.key && ['a', 'z', 'y'].includes(e.key.toLowerCase())) {
+        return;
+      }
+
+      // Block Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+P, Ctrl+U, Ctrl+S, Ctrl+R
       if (e.ctrlKey || e.metaKey) {
-        const forbiddenKeys = ['c', 'v', 'x', 'p', 'u', 's', 'a', 'r'];
-        if (forbiddenKeys.includes(e.key.toLowerCase())) {
+        const forbiddenKeys = ['c', 'v', 'x', 'p', 'u', 's', 'r'];
+        if (e.key && forbiddenKeys.includes(e.key.toLowerCase())) {
           e.preventDefault();
           handleSecurityBreach(
             'blocked_key',
@@ -622,12 +655,12 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
                 </div>
 
                 {/* Bottom Navigation Buttons */}
-                <div className="pt-8 border-t border-slate-100 mt-8 flex items-center justify-between gap-3">
+                <div className="pt-8 border-t border-slate-100 mt-8 flex items-center justify-between gap-2 sm:gap-3">
                   <button
                     type="button"
-                    onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+                    onClick={() => handleNavigateQuestion(Math.max(0, currentIndex - 1))}
                     disabled={currentIndex === 0}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                    className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
                       currentIndex === 0
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
@@ -637,11 +670,21 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
                     <span>Sebelumnya</span>
                   </button>
 
+                  {/* Mobile Question Palette Opener */}
+                  <button
+                    type="button"
+                    onClick={() => setShowMobilePalette(true)}
+                    className="lg:hidden flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Daftar Soal ({currentIndex + 1}/{questions.length})</span>
+                  </button>
+
                   {currentIndex < questions.length - 1 ? (
                     <button
                       type="button"
-                      onClick={() => setCurrentIndex(currentIndex + 1)}
-                      className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors shadow-xs"
+                      onClick={() => handleNavigateQuestion(currentIndex + 1)}
+                      className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors shadow-xs"
                     >
                       <span>Berikutnya</span>
                       <ChevronRight className="w-4 h-4" />
@@ -650,10 +693,10 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowConfirmModal(true)}
-                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-sm"
+                      className="flex items-center gap-2 px-5 sm:px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-sm"
                     >
                       <Send className="w-4 h-4" />
-                      <span>Kumpulkan Jawaban</span>
+                      <span>Kumpulkan</span>
                     </button>
                   )}
                 </div>
@@ -687,7 +730,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
               return (
                 <button
                   key={q.id}
-                  onClick={() => setCurrentIndex(idx)}
+                  onClick={() => handleNavigateQuestion(idx)}
                   className={`h-11 rounded-lg border text-xs flex flex-col items-center justify-center relative transition-all ${style} ${
                     isCurrent ? 'ring-2 ring-offset-2 ring-slate-900 shadow-sm' : ''
                   }`}
@@ -727,6 +770,85 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
           </button>
         </aside>
       </div>
+
+      {/* MOBILE QUESTION PALETTE MODAL / DRAWER */}
+      {showMobilePalette && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 lg:hidden">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl max-w-md w-full p-6 animate-in slide-in-from-bottom sm:zoom-in-95 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Daftar Nomor Soal</h3>
+                <p className="text-[11px] text-slate-500">Pilih nomor untuk melompat</p>
+              </div>
+              <button
+                onClick={() => setShowMobilePalette(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-5 gap-2 overflow-y-auto flex-1 p-1">
+              {questions.map((q, idx) => {
+                const ans = answers[q.id];
+                const isCurrent = idx === currentIndex;
+                const hasAnswer = ans && ans.value !== undefined && ans.value !== null && ans.value !== '';
+                const isFlagged = ans?.isFlagged;
+
+                let style = 'bg-slate-100 text-slate-700 border-slate-200';
+                if (isFlagged) {
+                  style = 'bg-amber-400 text-amber-950 border-amber-500 font-bold';
+                } else if (hasAnswer) {
+                  style = 'bg-blue-600 text-white border-blue-700 font-bold';
+                }
+
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => handleNavigateQuestion(idx)}
+                    className={`h-11 rounded-lg border text-xs flex flex-col items-center justify-center relative transition-all ${style} ${
+                      isCurrent ? 'ring-2 ring-offset-2 ring-slate-900 shadow-sm' : ''
+                    }`}
+                  >
+                    <span className="font-mono">{idx + 1}</span>
+                    {isFlagged && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-900 absolute top-1 right-1"></span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 mt-4 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Terjawab: {answeredCount}/{questions.length}</span>
+              <button
+                onClick={() => {
+                  setShowMobilePalette(false);
+                  setShowConfirmModal(true);
+                }}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold"
+              >
+                Kumpulkan Ujian
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OVERLAY: TIME EXPIRED AUTO-SUBMISSION */}
+      {isTimeExpiredSubmitting && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 text-center max-w-sm w-full space-y-3 shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+              <Clock className="w-6 h-6 animate-pulse" />
+            </div>
+            <h3 className="font-bold text-slate-900 text-base">Waktu Pengerjaan Habis</h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Sistem sedang mengunci lembar ujian dan mengirimkan jawaban Anda secara otomatis ke server...
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* MODAL 1: WARNING MODAL (TERDETEKSI AKTIVITAS MENINGGALKAN HALAMAN) */}
       {showWarningModal && !isSuspended && (

@@ -34,8 +34,13 @@ export const LiveMonitoring: React.FC<LiveMonitoringProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudentForLogs, setSelectedStudentForLogs] = useState<ExamSession | null>(null);
-  const [unlockPinInput, setUnlockPinInput] = useState('');
-  const [unlockError, setUnlockError] = useState('');
+  const [sessionToForceSubmit, setSessionToForceSubmit] = useState<ExamSession | null>(null);
+  const [toastMessage, setToastMessage] = useState<string>('');
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
 
   const currentExam = exams.find(e => e.id === selectedExamId) || exams[0];
   const examSessions = currentExam ? sessions.filter(s => s.examId === currentExam.id) : [];
@@ -54,20 +59,21 @@ export const LiveMonitoring: React.FC<LiveMonitoringProps> = ({
     StorageService.unlockSuspendedSession(session.id);
     onRefresh();
     setSelectedStudentForLogs(null);
+    showToast(`Suspensi layar untuk ${session.studentName} berhasil dibuka.`);
   };
 
   const handleAddExtraTime = (session: ExamSession, minutes: number) => {
     StorageService.addExtraTime(session.id, minutes);
     onRefresh();
-    alert(`Berhasil menambahkan waktu +${minutes} menit untuk ${session.studentName}.`);
+    showToast(`Berhasil menambahkan waktu +${minutes} menit untuk ${session.studentName}.`);
   };
 
-  const handleForceSubmit = (session: ExamSession) => {
-    if (confirm(`Paksa kumpulkan ujian milik ${session.studentName}? Siswa tidak dapat mengubah jawaban lagi.`)) {
-      if (currentExam) {
-        StorageService.calculateAndSubmitSession(session, currentExam);
-        onRefresh();
-      }
+  const handleConfirmForceSubmit = () => {
+    if (sessionToForceSubmit && currentExam) {
+      StorageService.calculateAndSubmitSession(sessionToForceSubmit, currentExam);
+      setSessionToForceSubmit(null);
+      onRefresh();
+      showToast(`Ujian milik ${sessionToForceSubmit.studentName} telah berhasil dikumpulkan.`);
     }
   };
 
@@ -283,7 +289,7 @@ export const LiveMonitoring: React.FC<LiveMonitoringProps> = ({
                         +5m
                       </button>
                       <button
-                        onClick={() => handleForceSubmit(session)}
+                        onClick={() => setSessionToForceSubmit(session)}
                         title="Paksa kumpulkan ujian"
                         className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium"
                       >
@@ -365,6 +371,45 @@ export const LiveMonitoring: React.FC<LiveMonitoringProps> = ({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Force Submit Confirmation Modal */}
+      {sessionToForceSubmit && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-xl border border-slate-200">
+            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+              <Send className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">Paksa Kumpulkan Ujian?</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Yakin ingin mengumpulkan ujian milik <strong>"{sessionToForceSubmit.studentName}"</strong>? Siswa tidak akan dapat mengubah lembar jawaban lagi.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setSessionToForceSubmit(null)}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirmForceSubmit}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold"
+              >
+                Ya, Kumpulkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-800 text-xs flex items-center gap-2 animate-in slide-in-from-bottom">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
         </div>
       )}
     </div>

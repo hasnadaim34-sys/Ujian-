@@ -65,6 +65,10 @@ export const QuestionBank: React.FC<QuestionBankProps> = ({
   // Preview Modal
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
 
+  // Form validation & delete modal state
+  const [formError, setFormError] = useState('');
+  const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
+
   const resetForm = () => {
     setEditingId(null);
     setType('pg');
@@ -73,6 +77,7 @@ export const QuestionBank: React.FC<QuestionBankProps> = ({
     setSubject('IPA');
     setGradeLevel('IX');
     setExplanation('');
+    setFormError('');
     setPgOptions([
       { id: 'A', text: '' },
       { id: 'B', text: '' },
@@ -101,6 +106,7 @@ export const QuestionBank: React.FC<QuestionBankProps> = ({
     setSubject(q.subject);
     setGradeLevel(q.gradeLevel);
     setExplanation(q.explanation || '');
+    setFormError('');
 
     if (q.type === 'pg' && q.options) {
       setPgOptions(q.options);
@@ -121,9 +127,34 @@ export const QuestionBank: React.FC<QuestionBankProps> = ({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
+
     if (!prompt.trim()) {
-      alert('Teks pertanyaan wajib diisi!');
+      setFormError('Teks stimulus / pertanyaan wajib diisi!');
       return;
+    }
+
+    if (type === 'pg') {
+      const emptyOpt = pgOptions.find(o => !o.text.trim());
+      if (emptyOpt) {
+        setFormError(`Teks opsi ${emptyOpt.id} belum diisi.`);
+        return;
+      }
+    }
+
+    if (type === 'isian') {
+      if (!acceptedAnswersText.trim()) {
+        setFormError('Kunci jawaban isian singkat wajib diisi.');
+        return;
+      }
+    }
+
+    if (type === 'bs') {
+      const validStmts = bsStatements.filter(s => s.statement.trim().length > 0);
+      if (validStmts.length === 0) {
+        setFormError('Minimal sediakan 1 pernyataan benar/salah.');
+        return;
+      }
     }
 
     const question: Question = {
@@ -155,9 +186,10 @@ export const QuestionBank: React.FC<QuestionBankProps> = ({
     onRefresh();
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Hapus butir soal ini dari Bank Soal?')) {
-      StorageService.deleteQuestionFromBank(id);
+  const handleConfirmDelete = () => {
+    if (questionToDelete) {
+      StorageService.deleteQuestionFromBank(questionToDelete);
+      setQuestionToDelete(null);
       onRefresh();
     }
   };
@@ -227,6 +259,13 @@ export const QuestionBank: React.FC<QuestionBankProps> = ({
               <X className="w-5 h-5" />
             </button>
           </div>
+
+          {formError && (
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs flex items-center gap-2">
+              <X className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
 
           <form onSubmit={handleSave} className="space-y-5">
             {/* Type selector */}
@@ -637,7 +676,7 @@ export const QuestionBank: React.FC<QuestionBankProps> = ({
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDelete(q.id)}
+                    onClick={() => setQuestionToDelete(q.id)}
                     title="Hapus Soal"
                     className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
                   >
@@ -649,6 +688,37 @@ export const QuestionBank: React.FC<QuestionBankProps> = ({
           ))
         )}
       </div>
+
+      {/* Delete Question Confirmation Modal */}
+      {questionToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-xl border border-slate-200">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">Hapus Butir Soal?</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Butir soal ini akan dihapus dari Bank Soal utama. Paket ujian yang sudah menggunakan soal ini tidak akan terpengaruh.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setQuestionToDelete(null)}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold"
+              >
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
