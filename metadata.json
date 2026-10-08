@@ -1,0 +1,6 @@
+{
+  "name": "SIMAS-CBT: Sistem Asesmen & Ujian Digital Terproteksi",
+  "description": "Aplikasi Asesmen Digital dan Ujian Berbasis Komputer (CBT) modern untuk sekolah di Indonesia dengan mode kiosk terlindungi, pemantauan integritas ujian, bank soal multi-tipe, dan analitik penilaian otomatis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
